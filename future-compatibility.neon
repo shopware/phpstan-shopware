@@ -7,6 +7,14 @@ services:
     -
         class: Shopware\PhpStan\Rule\FutureCompatibility\AnnouncedTypeResolver
     -
+        class: Shopware\PhpStan\Rule\FutureCompatibility\ClassMovedUsage
+    -
+        class: Shopware\PhpStan\Rule\FutureCompatibility\FutureClassMovedUsageRule
+        tags: [phpstan.rules.rule]
+    -
+        class: Shopware\PhpStan\Rule\FutureCompatibility\FutureClassMovedExpressionUsageRule
+        tags: [phpstan.rules.rule]
+    -
         class: Shopware\PhpStan\Rule\FutureCompatibility\FutureCallSiteRule
         tags: [phpstan.rules.rule]
     -
