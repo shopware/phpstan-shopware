@@ -6,8 +6,10 @@ namespace Shopware\PhpStan\Rule\FutureCompatibility;
 
 use PhpParser\Node\Name;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\RuleErrorBuilder;
+use Shopware\Core\Framework\Deprecation\ClassAliasRegistry;
 
 /**
  * @internal
@@ -17,9 +19,32 @@ final class ClassMovedUsage
     private const ATTRIBUTE = 'Shopware\\Core\\Framework\\Deprecation\\BCChange\\ClassMoved';
 
     /**
+     * @var array<non-empty-string, class-string>
+     */
+    private readonly array $aliases;
+
+    /**
      * @var array<lowercase-string, array{class: class-string, version: string}>|null
      */
     private ?array $classAliases = null;
+
+    /**
+     * @param array<non-empty-string, class-string>|null $aliases
+     */
+    public function __construct(
+        private readonly ReflectionProvider $reflectionProvider,
+        ?array $aliases = null,
+    ) {
+        if ($aliases !== null || !class_exists(ClassAliasRegistry::class)) {
+            $this->aliases = $aliases ?? [];
+
+            return;
+        }
+
+        /** @var array<non-empty-string, class-string> $registryAliases */
+        $registryAliases = ClassAliasRegistry::ALIASES;
+        $this->aliases = $registryAliases;
+    }
 
     public function error(Name $name, Scope $scope): ?IdentifierRuleError
     {
@@ -50,24 +75,26 @@ final class ClassMovedUsage
         }
 
         $this->classAliases = [];
-        foreach (get_declared_classes() as $declaredClassName) {
-            if (!str_starts_with(strtolower($declaredClassName), 'shopware\\')) {
+        foreach ($this->aliases as $previousClassName => $canonicalClassName) {
+            if (!$this->reflectionProvider->hasClass($canonicalClassName)) {
                 continue;
             }
 
-            $reflection = new \ReflectionClass($declaredClassName);
-            $canonicalClassName = $reflection->getName();
-            if (strcasecmp($declaredClassName, $canonicalClassName) === 0) {
-                continue;
-            }
+            $reflection = $this->reflectionProvider->getClass($canonicalClassName)->getNativeReflection();
+            foreach ($reflection->getAttributes() as $attribute) {
+                if ($attribute->getName() !== self::ATTRIBUTE) {
+                    continue;
+                }
 
-            foreach ($reflection->getAttributes(self::ATTRIBUTE) as $attribute) {
                 $arguments = $attribute->getArguments();
-                $previousClassName = $arguments['previousClassName'] ?? $arguments[1] ?? null;
+                $attributePreviousClassName = $arguments['previousClassName'] ?? $arguments[1] ?? null;
                 $version = $arguments['version'] ?? $arguments[0] ?? null;
 
-                if (is_string($previousClassName) && is_string($version) && strcasecmp($previousClassName, $declaredClassName) === 0) {
-                    $this->classAliases[strtolower($declaredClassName)] = [
+                if (is_string($attributePreviousClassName)
+                    && is_string($version)
+                    && strcasecmp($attributePreviousClassName, $previousClassName) === 0
+                ) {
+                    $this->classAliases[strtolower($previousClassName)] = [
                         'class' => $canonicalClassName,
                         'version' => $version,
                     ];
