@@ -40,6 +40,11 @@ It reports calls and extensions incompatible with next-major declarations announ
 This includes references to old class names retained as aliases after a class move.
 When [keulinho/shopware-polyfill](https://github.com/keulinho/shopware-polyfill) is installed, the moved-class check also reads aliases declared only by that package, and the ruleset suggests provider-side replacement abstract classes and the dynamic scheduled-task interface that the polyfill makes available on older Shopware versions.
 Consumer type hints are not reported because existing older core services may still require accepting both the old and new contracts.
+
+**Proof of concept:** The polyfill-aware suggestions currently copy some replacement definitions into this package to evaluate the approach.
+Before continuing toward a production implementation, `keulinho/shopware-polyfill` should expose one machine-readable registry for all polyfilled symbols and migrations.
+The PHPStan extension should discover its complete rule configuration dynamically from that registry instead of maintaining separate definition lists.
+
 This ruleset is intentionally separate from `rules.neon`: adopting it means choosing to prepare for the next major while remaining compatible with the current one.
 
 ## Features

@@ -20,6 +20,11 @@ use Shopware\Core\System\NumberRange\ValueGenerator\AbstractNumberRangeValueGene
 use Shopware\Core\System\NumberRange\ValueGenerator\NumberRangeValueGeneratorInterface;
 
 /**
+ * Proof of concept for polyfill-aware replacement suggestions.
+ *
+ * A production implementation must discover every replacement dynamically from a
+ * machine-readable polyfill registry instead of maintaining mappings in this rule.
+ *
  * @implements Rule<InClassNode>
  * @internal
  */
