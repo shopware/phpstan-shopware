@@ -37,9 +37,9 @@ includes:
 ```
 
 It reports calls and extensions incompatible with next-major declarations announced by
-Shopware's BC-change attributes. This ruleset is intentionally separate from `rules.neon`:
-adopting it means choosing to prepare for the next major while remaining compatible with the
-current one.
+Shopware's BC-change attributes. This includes references to old class names retained as aliases
+after a class move. This ruleset is intentionally separate from `rules.neon`: adopting it means
+choosing to prepare for the next major while remaining compatible with the current one.
 
 ## Features
 
