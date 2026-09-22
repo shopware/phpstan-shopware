@@ -27,8 +27,7 @@ class Consumer
     }
 }
 
-/** @deprecated tag:v6.8.0 - Removed together with the old class name. */
-class DeprecatedConsumer
+class SecondConsumer
 {
     public function useAlias(MovedSubject $subject): void
     {

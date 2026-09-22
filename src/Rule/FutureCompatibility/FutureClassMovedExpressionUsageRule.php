@@ -7,6 +7,7 @@ namespace Shopware\PhpStan\Rule\FutureCompatibility;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\Instanceof_;
+use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Expr\StaticPropertyFetch;
 use PhpParser\Node\Name;
@@ -32,6 +33,7 @@ final class FutureClassMovedExpressionUsageRule implements Rule
     {
         $name = match (true) {
             $node instanceof Instanceof_,
+            $node instanceof New_,
             $node instanceof StaticCall,
             $node instanceof StaticPropertyFetch => $node->class instanceof Name ? $node->class : null,
             default => null,

@@ -18,18 +18,20 @@ class FutureClassMovedExpressionUsageRuleTest extends RuleTestCase
 {
     public function testReportsOldClassNamesInExpressions(): void
     {
-        $message = 'Class "Shopware\\PhpStan\\Tests\\Fixture\\FutureClassMovedUsageRule\\Legacy\\MovedSubject" moved to "Shopware\\PhpStan\\Tests\\Fixture\\FutureClassMovedUsageRule\\Canonical\\MovedSubject" and the old name will be removed in v6.8.0. Use the new name now.';
+        $message = 'Class "Shopware\\PhpStan\\Tests\\Fixture\\FutureClassMovedUsageRule\\Legacy\\MovedSubject" moved to "Shopware\\PhpStan\\Tests\\Fixture\\FutureClassMovedUsageRule\\Canonical\\MovedSubject". Use the new name now.';
 
         $this->analyse([__DIR__ . '/fixtures/FutureClassMovedUsageRule/usage.php'], [
+            [$message, 18],
             [$message, 21],
             [$message, 22],
             [$message, 23],
+            [$message, 34],
         ]);
     }
 
     protected function getRule(): Rule
     {
-        return new FutureClassMovedExpressionUsageRule(new ClassMovedUsage(self::createReflectionProvider(), [
+        return new FutureClassMovedExpressionUsageRule(new ClassMovedUsage([
             'Shopware\\PhpStan\\Tests\\Fixture\\FutureClassMovedUsageRule\\Legacy\\MovedSubject' => MovedSubject::class,
         ]));
     }
