@@ -41,6 +41,13 @@ Shopware's BC-change attributes. This includes references to old class names ret
 after a class move. This ruleset is intentionally separate from `rules.neon`: adopting it means
 choosing to prepare for the next major while remaining compatible with the current one.
 
+For `NewRequiredParameter` and `NewOptionalParameter`, supplied arguments are checked against
+the announced type, including parameters currently read through `func_get_args()` or
+`func_get_arg()`. Missing required arguments are reported; optional arguments can be omitted.
+Pass undeclared parameters positionally. Multiple new parameters are matched in attribute
+declaration order after the current parameters. Calls containing argument unpacking are
+currently skipped by these checks.
+
 ## Features
 
 - Custom rules for Shopware 6.5 specific patterns

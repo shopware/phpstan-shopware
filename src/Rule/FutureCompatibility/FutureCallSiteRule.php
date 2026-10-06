@@ -22,6 +22,7 @@ use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
 use PHPStan\Rules\IdentifierRuleError;
+use PHPStan\Rules\RuleLevelHelper;
 use PHPStan\Type\VerbosityLevel;
 
 /**
@@ -40,6 +41,7 @@ final class FutureCallSiteRule implements Rule
     private const PARAMETER_REMOVAL = 'shopware.futureIncompatibility.parameterRemoval';
     private const PARAMETER_NAME_CHANGE = 'shopware.futureIncompatibility.parameterNameChange';
     private const NEW_REQUIRED_PARAMETER = 'shopware.futureIncompatibility.newRequiredParameter';
+    private const NEW_PARAMETER_TYPE = 'shopware.futureIncompatibility.newParameterType';
     private const PARAMETER_DEFAULT_VALUE_CHANGE = 'shopware.futureIncompatibility.parameterDefaultValueChange';
     private const PARAMETER_TYPE_NARROWING = 'shopware.futureIncompatibility.parameterTypeNarrowing';
     private const CLASS_BECOMES_INTERNAL = 'shopware.futureIncompatibility.classBecomesInternal';
@@ -47,6 +49,7 @@ final class FutureCallSiteRule implements Rule
     public function __construct(
         private readonly ReflectionProvider $reflectionProvider,
         private readonly AnnouncedTypeResolver $typeResolver,
+        private readonly RuleLevelHelper $ruleLevelHelper,
     ) {}
 
     public function getNodeType(): string
@@ -90,11 +93,24 @@ final class FutureCallSiteRule implements Rule
 
         $method = $native->getMethod($methodName);
         $symbol = sprintf('%s::%s()', $class->getDisplayName(), $methodName);
+        $newParameterPosition = count($method->getParameters());
 
         foreach ($method->getAttributes() as $attribute) {
             $name = $attribute->getName();
             $arguments = $attribute->getArguments();
             $version = $this->stringArgument($arguments, 'version', 0);
+            $isNewParameter = in_array($name, [self::ATTRIBUTE_NAMESPACE . 'NewRequiredParameter', self::ATTRIBUTE_NAMESPACE . 'NewOptionalParameter'], true);
+            $parameterPosition = null;
+            if ($isNewParameter) {
+                $parameter = $this->stringArgument($arguments, 'parameterName', 1);
+                foreach ($method->getParameters() as $candidate) {
+                    if ($candidate->getName() === $parameter) {
+                        $parameterPosition = $candidate->getPosition();
+                        break;
+                    }
+                }
+                $parameterPosition ??= $newParameterPosition++;
+            }
 
             if ($this->isDeprecatedInVersion($scope, $version)) {
                 continue;
@@ -120,10 +136,24 @@ final class FutureCallSiteRule implements Rule
                         $errors[] = $this->error(sprintf('Parameter $%s of "%s" will be renamed to $%s in %s. A named argument cannot be compatible with both versions; pass it positionally.', $parameter, $symbol, $newName, $version), self::PARAMETER_NAME_CHANGE);
                     }
                 }
-            } elseif ($name === self::ATTRIBUTE_NAMESPACE . 'NewRequiredParameter') {
-                if (!$this->hasUnpack($node) && count($node->getArgs()) <= count($method->getParameters())) {
+            } elseif ($isNewParameter) {
+                if (!$this->hasUnpack($node)) {
                     $parameter = $this->stringArgument($arguments, 'parameterName', 1);
-                    $errors[] = $this->error(sprintf('"%s" will require a new parameter $%s in %s. Pass it positionally now to stay compatible with both versions.', $symbol, $parameter, $version), self::NEW_REQUIRED_PARAMETER);
+                    $argument = $this->argument($node, $method, $parameter) ?? ($node->getArgs()[$parameterPosition] ?? null);
+                    if ($argument !== null && $argument->name !== null && $argument->name->toString() !== $parameter) {
+                        $argument = null;
+                    }
+                    if ($argument === null && $name === self::ATTRIBUTE_NAMESPACE . 'NewRequiredParameter') {
+                        $errors[] = $this->error(sprintf('"%s" will require a new parameter $%s in %s. Pass it positionally now to stay compatible with both versions.', $symbol, $parameter, $version), self::NEW_REQUIRED_PARAMETER);
+                    }
+                    $type = $this->stringArgument($arguments, 'parameterType', 2);
+                    $announced = $this->typeResolver->resolve($type, $method->getDeclaringClass()->getName());
+                    if ($argument !== null && $announced !== null) {
+                        $actual = $scope->getType($argument->value);
+                        if (!$this->ruleLevelHelper->accepts($announced, $actual, $scope->isDeclareStrictTypes())->result) {
+                            $errors[] = $this->error(sprintf('New parameter $%s of "%s" will require %s in %s, but %s is passed. Pass %s to stay compatible with both versions.', $parameter, $symbol, $type, $version, $actual->describe(VerbosityLevel::typeOnly()), $type), self::NEW_PARAMETER_TYPE);
+                        }
+                    }
                 }
             } elseif ($name === self::ATTRIBUTE_NAMESPACE . 'ParameterDefaultValueChange') {
                 $parameter = $arguments['parameterName'] ?? $arguments[1] ?? null;
