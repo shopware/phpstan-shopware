@@ -6,6 +6,7 @@ namespace Shopware\PhpStan\Tests\Rule;
 
 use PHPStan\PhpDoc\TypeStringResolver;
 use PHPStan\Rules\Rule;
+use PHPStan\Rules\RuleLevelHelper;
 use PHPStan\Testing\RuleTestCase;
 use Shopware\PhpStan\Rule\FutureCompatibility\AnnouncedTypeResolver;
 use Shopware\PhpStan\Rule\FutureCompatibility\FutureCallSiteRule;
@@ -35,6 +36,25 @@ class FutureCallSiteRuleTest extends RuleTestCase
         ]);
     }
 
+    public function testChecksNewParameterTypes(): void
+    {
+        $subject = 'Shopware\\PhpStan\\Tests\\Fixture\\FutureCallSiteRule\\NewParameters\\Subject';
+        $constructor = 'Shopware\\PhpStan\\Tests\\Fixture\\FutureCallSiteRule\\NewParameters\\ConstructorSubject';
+        $this->analyse([__DIR__ . '/fixtures/FutureCallSiteRule/new-parameters.php'], [
+            [sprintf('"%s::required()" will require a new parameter $localeCode in v6.8.0. Pass it positionally now to stay compatible with both versions.', $subject), 58],
+            [sprintf('New parameter $localeCode of "%s::required()" will require string in v6.8.0, but int is passed. Pass string to stay compatible with both versions.', $subject), 60],
+            [sprintf('New parameter $localeCode of "%s::required()" will require string in v6.8.0, but null is passed. Pass string to stay compatible with both versions.', $subject), 61],
+            [sprintf('New parameter $localeCode of "%s::required()" will require string in v6.8.0, but int|string is passed. Pass string to stay compatible with both versions.', $subject), 62],
+            [sprintf('New parameter $states of "%s::optional()" will require list<string> in v6.8.0, but int is passed. Pass list<string> to stay compatible with both versions.', $subject), 66],
+            [sprintf('New parameter $states of "%s::optional()" will require list<string> in v6.8.0, but array<int, int> is passed. Pass list<string> to stay compatible with both versions.', $subject), 67],
+            [sprintf('"%s::multiple()" will require a new parameter $strict in v6.8.0. Pass it positionally now to stay compatible with both versions.', $subject), 68],
+            [sprintf('New parameter $states of "%s::multiple()" will require list<string> in v6.8.0, but array<int, int> is passed. Pass list<string> to stay compatible with both versions.', $subject), 71],
+            [sprintf('New parameter $strict of "%s::multiple()" will require bool in v6.8.0, but string is passed. Pass bool to stay compatible with both versions.', $subject), 71],
+            [sprintf('New parameter $other of "%s::nullable()" will require ?string in v6.8.0, but int is passed. Pass ?string to stay compatible with both versions.', $subject), 75],
+            [sprintf('New parameter $strict of "%s::__construct()" will require bool in v6.8.0, but string is passed. Pass bool to stay compatible with both versions.', $constructor), 81],
+        ]);
+    }
+
     protected function getRule(): Rule
     {
         $reflectionProvider = self::createReflectionProvider();
@@ -42,6 +62,6 @@ class FutureCallSiteRuleTest extends RuleTestCase
         return new FutureCallSiteRule($reflectionProvider, new AnnouncedTypeResolver(
             self::getContainer()->getByType(TypeStringResolver::class),
             $reflectionProvider,
-        ));
+        ), self::getContainer()->getByType(RuleLevelHelper::class));
     }
 }
