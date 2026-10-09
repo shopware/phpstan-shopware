@@ -15,23 +15,33 @@ use Shopware\Core\Framework\Deprecation\ClassAliasRegistry;
  */
 final class ClassMovedUsage
 {
+    private const POLYFILL_ALIAS_LOADER = 'Keulinho\\ShopwarePolyfill\\ClassAliasLoader';
+
     /**
      * @var array<lowercase-string, class-string>
      */
     private readonly array $aliases;
 
     /**
-     * @param array<non-empty-string, class-string>|null $aliases
+     * @param array<non-empty-string, class-string>|null $coreAliases
+     * @param array<non-empty-string, class-string>|null $polyfillAliases
      */
-    public function __construct(?array $aliases = null)
+    public function __construct(?array $coreAliases = null, ?array $polyfillAliases = null)
     {
-        if ($aliases === null) {
-            /** @var array<non-empty-string, class-string> $aliases */
-            $aliases = class_exists(ClassAliasRegistry::class) ? ClassAliasRegistry::ALIASES : [];
+        if ($coreAliases === null) {
+            /** @var array<non-empty-string, class-string> $coreAliases */
+            $coreAliases = class_exists(ClassAliasRegistry::class) ? ClassAliasRegistry::ALIASES : [];
+        }
+
+        if ($polyfillAliases === null) {
+            /** @var array<non-empty-string, class-string> $polyfillAliases */
+            $polyfillAliases = class_exists(self::POLYFILL_ALIAS_LOADER)
+                ? constant(self::POLYFILL_ALIAS_LOADER . '::ALIASES')
+                : [];
         }
 
         $normalizedAliases = [];
-        foreach ($aliases as $previousClassName => $canonicalClassName) {
+        foreach ([...$polyfillAliases, ...$coreAliases] as $previousClassName => $canonicalClassName) {
             $normalizedAliases[strtolower($previousClassName)] = $canonicalClassName;
         }
 
