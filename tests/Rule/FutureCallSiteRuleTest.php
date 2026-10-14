@@ -55,6 +55,18 @@ class FutureCallSiteRuleTest extends RuleTestCase
         ]);
     }
 
+    public function testAbstractMethodsKeepAnnouncedParameterValidation(): void
+    {
+        $subject = 'Shopware\\PhpStan\\Tests\\Fixture\\AnnouncedParameterCountIgnoreExtension\\AbstractRoute';
+        $interface = 'Shopware\\PhpStan\\Tests\\Fixture\\AnnouncedParameterCountIgnoreExtension\\Route';
+        $this->analyse([__DIR__ . '/fixtures/AnnouncedParameterCountIgnoreExtension/calls.php'], [
+            [sprintf('"%s::get()" will require a new parameter $criteria in v6.8.0. Pass it positionally now to stay compatible with both versions.', $subject), 43],
+            [sprintf('New parameter $criteria of "%s::get()" will require string in v6.8.0, but int is passed. Pass string to stay compatible with both versions.', $subject), 48],
+            [sprintf('"%s::get()" will require a new parameter $criteria in v6.8.0. Pass it positionally now to stay compatible with both versions.', $subject), 49],
+            [sprintf('New parameter $criteria of "%s::get()" will require string in v6.8.0, but int is passed. Pass string to stay compatible with both versions.', $interface), 50],
+        ]);
+    }
+
     protected function getRule(): Rule
     {
         $reflectionProvider = self::createReflectionProvider();

@@ -1,0 +1,11 @@
+includes:
+    - ../../../../future-compatibility.neon
+
+services:
+    - PHPStan\Rules\Methods\CallMethodsRule
+    - PHPStan\Rules\Methods\CallStaticMethodsRule
+    -
+        class: PHPStan\Rules\Classes\InstantiationRule
+        arguments:
+            newOnNonObject: true
+            discoveringSymbolsTip: false
