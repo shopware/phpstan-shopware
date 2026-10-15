@@ -5,6 +5,9 @@
 
 services:
     -
+        class: Shopware\PhpStan\Rule\FutureCompatibility\AnnouncedParameterCountIgnoreExtension
+        tags: [phpstan.ignoreErrorExtension]
+    -
         class: Shopware\PhpStan\Rule\FutureCompatibility\AnnouncedTypeResolver
     -
         class: Shopware\PhpStan\Rule\FutureCompatibility\ClassMovedUsage
