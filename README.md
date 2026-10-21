@@ -41,6 +41,16 @@ Shopware's BC-change attributes. This includes references to old class names ret
 after a class move. This ruleset is intentionally separate from `rules.neon`: adopting it means
 choosing to prepare for the next major while remaining compatible with the current one.
 
+PHPStan Extension Installer enables only `rules.neon`; it does not enable future compatibility automatically. Keep the explicit `future-compatibility.neon` include even when using the installer.
+
+#### How announced changes are discovered
+
+The future-compatibility rules use the BC-change attributes available in your currently installed Shopware version. Upgrading Shopware can therefore reveal additional future incompatibilities as new changes are announced. They do not check against a separately installed future release, activate runtime feature flags, or guarantee compatibility with changes that have not been announced in the installed source.
+
+Discovery is usage-driven: PHPStan resolves a call or property access to its declaration, and the rules read that declaration's attributes through PHPStan's reflection API. Inheritance checks inspect parent declarations and the extension's overrides. Attribute names and arguments are inspected without instantiating the attributes; there is no generated catalogue or scan of every Shopware class.
+
+Each rule explicitly supports particular attributes from `Shopware\Core\Framework\Deprecation\BCChange`. A new attribute does not automatically become a compatibility check. Class moves are a special case: the rules use the installed Core's `ClassAliasRegistry::ALIASES`, rather than scanning `#[ClassMoved]` attributes.
+
 ## Features
 
 - Custom rules for Shopware 6.5 specific patterns
@@ -100,6 +110,92 @@ Here's a comprehensive list of all available rules:
 24. **ForbidDisabledSslVerificationRule**: Prevents disabling SSL/TLS certificate verification in `curl_setopt()` and `stream_context_create()` calls, which allows man-in-the-middle attacks.
 
 25. **NoEmptyResponseRule**: Detects Response class/subclass instantiations with empty or missing body content. Checks classes where the first constructor parameter represents the response body (e.g. `Response`, `JsonResponse`, `JsonApiResponse`) and allows empty bodies for status codes like 204, 301, 302, 304, 307, and 308.
+
+### Future Compatibility Rules (opt-in)
+
+The following checks and type extensions are registered only by `future-compatibility.neon`. They complement the ordinary checks for the currently installed API, rather than replacing them. Custom diagnostics use the `shopware.futureIncompatibility.` prefix; the identifiers below list its suffixes.
+
+#### FutureCallSiteRule
+
+Checks method/static calls, construction, and property visibility against announced changes:
+
+| Attribute | Check | Diagnostic suffix |
+| --- | --- | --- |
+| `BecomesInternal` | Calling methods or constructing/calling classes that will become internal | `methodBecomesInternal`, `classBecomesInternal` |
+| `VisibilityChange` | Method/property access from a scope that will no longer be allowed | `methodVisibilityChange`, `propertyVisibilityChange` |
+| `ParameterRemoval` | Passing a parameter scheduled for removal | `parameterRemoval` |
+| `ParameterNameChange` | Using the old name in a named argument | `parameterNameChange` |
+| `NewRequiredParameter` | Omitting a future required parameter or supplying an incompatible value | `newRequiredParameter`, `newParameterType` |
+| `NewOptionalParameter` | Supplying an incompatible value for an announced optional parameter | `newParameterType` |
+| `ParameterDefaultValueChange` | Omitting an argument whose default will change | `parameterDefaultValueChange` |
+| `ParameterTypeNarrowing` | Passing a value incompatible with the announced narrower type | `parameterTypeNarrowing` |
+
+For example, when Core announces a required string `$locale` after the current `$id` parameter:
+
+```php
+$service->load($id); // Reports shopware.futureIncompatibility.newRequiredParameter.
+$service->load($id, 'en_GB'); // Compatible positional call when Core provides a legacy shim.
+$service->load($id, 123); // Reports shopware.futureIncompatibility.newParameterType.
+```
+
+`AnnouncedParameterCountIgnoreExtension` allows positional extra arguments covered by `NewRequiredParameter` or `NewOptionalParameter` without broadly suppressing `arguments.count`. `FutureCallSiteRule` still checks their types and future requiredness. This does not make the native signature variadic or add support for named arguments to a positional shim. The count-error exception does not apply to calls with named arguments or unpacking; announced-parameter checks also skip unpacked calls because the argument count is unknown. Multiple new parameters follow attribute declaration order after the existing parameters. Types that cannot be resolved are not checked.
+
+#### FutureExtensionRule
+
+Checks subclasses and overrides against changes announced on parent declarations:
+
+| Attribute | Check | Diagnostic suffix |
+| --- | --- | --- |
+| `BecomesFinal` | Extending a class that will become final | `extendsClassBecomingFinal` |
+| `BecomesInternal` | Extending a class that will become internal | `extendsClassBecomingInternal` |
+| `BecomesAbstract` | Missing a concrete implementation of a method that will become abstract | `missingBecomesAbstractMethodImplementation` |
+| `NewOptionalParameter` | An override missing the announced optional parameter | `missingNewOptionalParameterInOverride` |
+| `ParameterTypeWidening` | An override accepting less than the announced parameter type | `parameterTypeWideningInOverride` |
+| `ReturnTypeNarrowing` | An override returning more than the announced return type allows | `returnTypeNarrowingInOverride` |
+| `BecomesReadonly`, `PropertyTypeNarrowing`, `PropertyTypeWidening`, private `VisibilityChange` | Redeclaring a parent property with an incompatible future contract | `propertyRedeclaration` |
+
+For example, if a parent announces that `$id` will widen from `string` to `?string`, update the override now; accepting the wider type is compatible with the current parent too:
+
+```diff
+-public function load(string $id): void
++public function load(?string $id): void
+```
+
+Some changes, such as a parent becoming final, cannot be solved by adjusting an override. Stop extending that class instead.
+
+#### FuturePropertyCompatibilityRule
+
+Checks assignments to properties declared outside the current class. `PropertyTypeNarrowing` reports `propertyTypeNarrowing` when an assigned value is incompatible with the future type. `BecomesReadonly` reports `propertyBecomesReadonly` when assigning outside the declaring class. Static property assignments are checked too.
+
+For example, if a property's announced type narrows from `int|string` to `int`:
+
+```php
+$entity->position = '1'; // Reports shopware.futureIncompatibility.propertyTypeNarrowing.
+$entity->position = 1; // Compatible with both types.
+```
+
+#### FutureClassMovedUsageRule and FutureClassMovedExpressionUsageRule
+
+Report `shopware.futureIncompatibility.classMoved` when source references an old class name registered in Core's `ClassAliasRegistry::ALIASES`. The two rules cover class-name nodes and expressions such as construction, static calls/property access, and `instanceof`. The old alias may still work at runtime; replace the reference with the canonical class name now.
+
+```diff
+-use Shopware\Core\Checkout\Document\DocumentDefinition;
++use Shopware\Core\Checkout\DocumentV2\DocumentDefinition;
+```
+
+#### FutureReturnTypeExtension and FuturePropertyTypeExtension
+
+These support ordinary PHPStan analysis rather than emitting their own diagnostics. `ReturnTypeWidening` supplies the announced type for method-call expressions; `PropertyTypeWidening` does the same for property reads. Consequently, downstream operations can produce ordinary PHPStan errors even though the installed declaration still has the narrower type.
+
+For example, if a method currently returns `string` but announces `?string`, account for `null` before passing the result to code requiring `string`:
+
+```php
+$label = $service->getLabel();
+strlen($label); // PHPStan reports that the announced value can be null.
+if ($label !== null) {
+    strlen($label); // Accepts both the current and announced return type.
+}
+```
 
 ## Configuration
 
